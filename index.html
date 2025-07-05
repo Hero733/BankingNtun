@@ -96,9 +96,6 @@
                         <i class="fas fa-credit-card"></i>
                         บัตรธนาคาร
                     </li>
-                    <li data-section="qr-transfer"> <i class="fas fa-qrcode"></i>
-                        โอนด้วย QR Code
-                    </li>
                     <li data-section="settings">
                         <i class="fas fa-cog"></i>
                         ตั้งค่า
@@ -271,54 +268,6 @@
                     <p><i class="fas fa-exclamation-triangle"></i> <strong>หมายเหตุ:</strong> นี่คือบัตรจำลองสำหรับแสดงผลเท่านั้น ห้ามใช้ข้อมูลส่วนตัวจริง.</p>
                 </div>
                 <div id="card-message" class="message"></div>
-            </div>
-
-            <div id="qr-transfer" class="content-section">
-                <h2>โอนด้วย QR Code</h2>
-                <div class="qr-code-section card">
-                    <h3>QR Code สำหรับรับเงินของคุณ</h3>
-                    <p>ให้คนอื่นสแกน QR Code นี้เพื่อโอนเงินให้คุณ:</p>
-                    <div id="my-qr-code" class="qr-code-display"></div>
-                    <div class="qr-info">
-                        <p>ชื่อ: <strong id="qr-fullname-display"></strong></p>
-                        <p>เลขที่บัญชี: <strong id="qr-account-number-display"></strong></p>
-                    </div>
-                    <button class="btn btn-secondary" id="download-qr-btn"><i class="fas fa-download"></i> ดาวน์โหลด QR Code</button>
-                </div>
-
-                <div class="qr-scan-section card">
-                    <h3>สแกน QR Code เพื่อโอนเงิน</h3>
-                    <p>สำหรับจำลองการสแกน QR Code เพื่อโอนเงิน</p>
-                    <div class="form-group">
-                        <label for="qr-input-data">ข้อมูล QR Code (จำลองการสแกน):</label>
-                        <input type="text" id="qr-input-data" placeholder="กรอกข้อมูล QR Code ที่ต้องการสแกน">
-                        <small>เช่น: {"type":"account","accountNumber":"1234567890","fullName":"นายสมชาย ใจดี"}</small>
-                    </div>
-                    <button class="btn btn-primary" id="scan-qr-btn"><i class="fas fa-qrcode"></i> สแกน QR Code (จำลอง)</button>
-                    <div id="qr-scan-message" class="message"></div>
-
-                    <form id="qr-transfer-form" class="hidden-form">
-                        <hr>
-                        <h4>ข้อมูลผู้รับ (จาก QR Code)</h4>
-                        <div class="form-group">
-                            <label>ชื่อผู้รับ:</label>
-                            <input type="text" id="scanned-recipient-name" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label>เลขที่บัญชีผู้รับ:</label>
-                            <input type="text" id="scanned-recipient-account" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="qr-transfer-amount"><i class="fas fa-dollar-sign"></i> จำนวนเงิน:</label>
-                            <input type="number" id="qr-transfer-amount" step="0.01" min="0.01" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="qr-transfer-notes"><i class="fas fa-sticky-note"></i> บันทึก (ไม่บังคับ):</label>
-                            <input type="text" id="qr-transfer-notes" placeholder="เช่น ค่าอาหาร">
-                        </div>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> ยืนยันการโอน</button>
-                    </form>
-                </div>
             </div>
 
             <div id="settings" class="content-section">
