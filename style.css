@@ -25,10 +25,10 @@ body {
     --error-color: #f04747;
     --success-color: #43b581;
     --balance-color: #43b581;
-    --transaction-deposit: #43b581; /* Green for deposit/in (เงินเข้า) */
-    --transaction-withdraw: #f04747; /* Red for withdraw/out (เงินออก) */
-    --transaction-transfer-out: #f04747; /* Red for transfer out (โอนออก -> เงินออก) */
-    --transaction-transfer-in: #43b581; /* Green for transfer in (โอนเข้า -> เงินเข้า) */
+    --transaction-deposit: #43b581; /* Green for deposit/in */
+    --transaction-withdraw: #f04747; /* Red for withdraw/out */
+    --transaction-transfer-out: #f7a600; /* Orange-yellow for transfer out */
+    --transaction-transfer-in: #8a48d8; /* Primary purple for transfer in */
     --shadow-light: rgba(0, 0, 0, 0.2);
     --shadow-dark: rgba(0, 0, 0, 0.4);
     --sidebar-width: 260px; /* Slightly wider sidebar */
@@ -685,14 +685,18 @@ header h1 {
 
 
 /* Transaction Type Colors - Updated */
-/* การกำหนดสีตรงนี้จะดึงมาจากตัวแปรด้านบน */
 .transaction-amount.deposit, .transaction-amount.transfer-in {
-    color: var(--transaction-deposit); /* เขียว: เงินเข้าทั้งหมด */
+    color: var(--transaction-deposit); /* Green */
 }
 .transaction-amount.withdraw, .transaction-amount.transfer-out {
-    color: var(--transaction-withdraw); /* แดง: เงินออกทั้งหมด */
+    color: var(--transaction-withdraw); /* Red for withdraw */
 }
-/* ไม่จำเป็นต้องมี override เพิ่มเติมแล้ว เพราะตัวแปรได้กำหนดสีไว้ชัดเจน */
+.transaction-amount.transfer-out { /* Override for specific transfer out */
+    color: var(--transaction-transfer-out); /* Orange-yellow */
+}
+.transaction-amount.transfer-in { /* Override for specific transfer in */
+    color: var(--transaction-transfer-in); /* Primary purple */
+}
 
 
 /* Chart Styles */
