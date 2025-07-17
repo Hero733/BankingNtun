@@ -1,9 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Firebase Global Objects (defined in index.html) ---
-    // Make sure 'auth' and 'db' are globally accessible from the script block in index.html
-    // For example: const auth = firebase.auth(); const db = firebase.firestore();
-    // These are assumed to be available here.
-
     // --- Authentication Elements ---
     const authContainer = document.getElementById('auth-container');
     const mainAppContainer = document.getElementById('main-app-container');
@@ -30,191 +25,330 @@ document.addEventListener('DOMContentLoaded', () => {
     const withdrawMessage = document.getElementById('withdraw-message');
     const transferForm = document.getElementById('transfer-form');
     const transferMessage = document.getElementById('transfer-message');
+    const generateCardBtn = document.getElementById('generate-card-btn');
+    const copyCardInfoBtn = document.getElementById('copy-card-info-btn');
+    const displayCardNumber = document.getElementById('display-card-number');
+    const displayCardHolder = document.getElementById('display-card-holder');
+    const displayCardExpiry = document.getElementById('display-card-expiry');
+    const displayCardCvv = document.getElementById('display-card-cvv');
+    const cardMessage = document.getElementById('card-message');
+    const settingsForm = document.getElementById('settings-form'); // Profile Settings
+    const accountSettingsForm = document.getElementById('account-settings-form'); // Password Change
+    const settingsMessage = document.getElementById('settings-message');
+    const profileNameInput = document.getElementById('profile-name');
+    const profilePicUploadInput = document.getElementById('profile-pic-upload');
+    const profilePicPreviewImg = document.getElementById('profile-pic-preview-img');
+    const accountNumberDisplay = document.getElementById('account-number-display');
+    const sidebarProfilePic = document.getElementById('sidebar-profile-pic');
+    const headerProfilePic = document.getElementById('header-profile-pic');
+    const sidebarUsername = document.getElementById('sidebar-username');
+    const headerUsername = document.getElementById('header-username');
+    const resetDataBtn = document.getElementById('reset-data');
+    const refreshBalanceBtn = document.querySelector('.refresh-balance');
+    const quickActionButtons = document.querySelectorAll('.quick-actions-card .btn');
+    const viewAllTransactionsBtn = document.querySelector('.view-all-transactions');
     const transactionTypeFilter = document.getElementById('transaction-type-filter');
     const transactionSort = document.getElementById('transaction-sort');
-    const applyFiltersBtn = document.getElementById('apply-filters-btn');
-    const generateCardBtn = document.getElementById('generate-card-btn');
-    const cardMessage = document.getElementById('card-message');
-    const currentUsernameDisplay = document.getElementById('current-username-display');
-    const currentUsernameSettings = document.getElementById('current-username-settings');
-    const darkModeToggle = document.getElementById('theme-toggle');
-    const darkModeToggleSettings = document.getElementById('dark-mode-toggle-settings');
-    const accountSettingsForm = document.getElementById('account-settings-form');
-    const settingsMessage = document.getElementById('settings-message');
-    const changePasswordForm = document.getElementById('change-password-form');
-    const resetDataBtn = document.getElementById('reset-data');
-    const refreshBalanceBtn = document.getElementById('refresh-balance-btn');
-    const viewAllTransactionsBtn = document.querySelector('.view-all-transactions-btn');
+    const applyFiltersBtn = document.getElementById('apply-filters');
 
-    // --- Global Variables (now managed by Firebase) ---
-    // No longer using local 'users', 'currentUser', 'balance', 'transactions', 'userSettings', 'bankCard', 'balanceHistory' directly from localStorage.
-    // These will be fetched from Firestore based on the logged-in Firebase user.
-    let currentUserFirebase = null; // Stores the Firebase User object
-    let userBalance = 0.00;
-    let userTransactions = [];
-    let userSettings = {}; // For dark mode, etc.
-    let userBankCard = null;
-    let userBalanceHistory = []; // For chart
+    // --- QR Transfer Elements ---
+    const myQrCodeContainer = document.getElementById('my-qr-code');
+    const qrFullnameDisplay = document.getElementById('qr-fullname-display');
+    const qrAccountNumberDisplay = document.getElementById('qr-account-number-display');
+    const downloadQrBtn = document.getElementById('download-qr-btn');
+    const qrInputData = document.getElementById('qr-input-data');
+    const scanQrBtn = document.getElementById('scan-qr-btn');
+    const qrScanMessage = document.getElementById('qr-scan-message');
+    const qrTransferForm = document.getElementById('qr-transfer-form');
+    const scannedRecipientName = document.getElementById('scanned-recipient-name');
+    const scannedRecipientAccount = document.getElementById('scanned-recipient-account');
+    const qrTransferAmount = document.getElementById('qr-transfer-amount');
+    const qrTransferNotes = document.getElementById('qr-transfer-notes');
 
-    let balanceChart; // Chart.js instance
+
+    // Chart.js instance
+    let balanceChart;
+
+    // --- State Management (using Local Storage) ---
+    let users = JSON.parse(localStorage.getItem('users')) || {};
+    let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+
+    let balance = 0.00;
+    let transactions = [];
+    let userSettings = null;
+    let bankCard = null;
+    let balanceHistory = [];
+
 
     // --- Utility Functions ---
 
-    /**
-     * Displays a message in the specified element.
-     * @param {HTMLElement} element - The message display element.
-     * @param {string} message - The message text.
-     * @param {boolean} isError - True if it's an error message, false for success.
-     */
-    function displayMessage(element, message, isError) {
-        element.textContent = message;
-        element.className = 'message ' + (isError ? 'error' : 'success');
-        element.style.display = 'block';
-        setTimeout(() => {
-            element.style.display = 'none';
-        }, 5000);
+    function saveState() {
+        if (currentUser && users[currentUser.username]) {
+            const userData = {
+                balance: balance.toFixed(2),
+                transactions: transactions,
+                userSettings: userSettings,
+                bankCard: bankCard,
+                balanceHistory: balanceHistory
+            };
+            users[currentUser.username].data = userData;
+            localStorage.setItem('users', JSON.stringify(users));
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        }
     }
 
-    /**
-     * Toggles password visibility.
-     * @param {Event} event - The click event.
-     */
-    function togglePasswordVisibility(event) {
-        const targetId = event.currentTarget.dataset.target;
-        const passwordInput = document.getElementById(targetId);
-        const icon = event.currentTarget.querySelector('i');
+    function loadUserState() {
+        if (currentUser && users[currentUser.username] && users[currentUser.username].role === 'student') {
+            const userData = users[currentUser.username].data;
+            balance = parseFloat(userData.balance) || 0.00;
+            transactions = userData.transactions || [];
+            userSettings = userData.userSettings || {
+                name: currentUser.fullName,
+                profilePic: null,
+                accountNumber: generateAccountNumber()
+            };
+            // Ensure profilePic has a default if not set in old data
+            if (!userSettings.profilePic || !userSettings.profilePic.startsWith('data:image/')) {
+                userSettings.profilePic = 'https://via.placeholder.com/40x40/555555/FFFFFF?text=' + (currentUser ? currentUser.fullName.charAt(0).toUpperCase() : 'U');
+            }
 
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            icon.classList.remove('fa-eye');
-            icon.classList.add('fa-eye-slash');
+            // Ensure accountNumber exists for existing users too
+            if (!userSettings.accountNumber) {
+                userSettings.accountNumber = generateAccountNumber();
+            }
+
+            bankCard = userData.bankCard || null;
+            balanceHistory = userData.balanceHistory || [{ date: new Date().toLocaleDateString('th-TH', {year: 'numeric', month: 'numeric', day: 'numeric'}), balance: 0.00 }];
+
         } else {
-            passwordInput.type = 'password';
-            icon.classList.remove('fa-eye-slash');
-            icon.classList.add('fa-eye');
+            balance = 0.00;
+            transactions = [];
+            userSettings = {
+                name: currentUser ? currentUser.fullName : 'ผู้ใช้ทั่วไป',
+                profilePic: 'https://via.placeholder.com/40x40/555555/FFFFFF?text=' + (currentUser ? currentUser.fullName.charAt(0).toUpperCase() : 'U'),
+                accountNumber: generateAccountNumber()
+            };
+            bankCard = null;
+            balanceHistory = [{ date: new Date().toLocaleDateString('th-TH', {year: 'numeric', month: 'numeric', day: 'numeric'}), balance: 0.00 }];
         }
+        saveState();
     }
 
-    // --- UI Management ---
-
-    /**
-     * Shows the specified content section and updates the title.
-     * @param {string} sectionId - The ID of the section to show (e.g., 'dashboard').
-     */
-    function showSection(sectionId) {
-        contentSections.forEach(section => {
-            section.classList.remove('active');
-        });
-        document.getElementById(`${sectionId}-section`).classList.add('active');
-        currentSectionTitle.textContent = document.querySelector(`[data-section="${sectionId}"] a`).textContent;
-
-        // Special handling for dashboard chart on section change
-        if (sectionId === 'dashboard' && balanceChart) {
-            balanceChart.resize();
-        }
+    function generateAccountNumber() {
+        // Simple 10-digit random number
+        return Math.floor(1000000000 + Math.random() * 9000000000).toString();
     }
 
-    /**
-     * Updates the balance display and chart.
-     */
+
     function updateBalanceDisplay() {
-        currentBalanceElem.textContent = `${userBalance.toFixed(2)} NTUN`;
-        renderBalanceChart();
+        currentBalanceElem.textContent = `$${balance.toFixed(2)}`;
     }
 
-    /**
-     * Renders recent transactions.
-     */
+    function addTransaction(type, amount, notes, recipient = null, sender = null, recipientAccount = null, senderAccount = null) {
+        const transaction = {
+            id: Date.now(),
+            type: type,
+            amount: parseFloat(amount).toFixed(2),
+            date: new Date().toLocaleString('th-TH', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            notes: notes,
+            recipient: recipient,
+            sender: sender,
+            recipientAccount: recipientAccount,
+            senderAccount: senderAccount,
+            username: currentUser.username
+        };
+        transactions.unshift(transaction);
+        // Record balance change for chart, ensure date is consistent for chart
+        balanceHistory.push({ date: new Date().toLocaleDateString('th-TH', {year: 'numeric', month: 'numeric', day: 'numeric'}), balance: balance });
+        // Keep history limited to a reasonable size (e.g., last 30 unique dates)
+        // Remove duplicates if multiple transactions happen on same day to keep chart cleaner
+        let uniqueDates = {};
+        balanceHistory = balanceHistory.filter(entry => {
+            if (uniqueDates[entry.date]) return false;
+            uniqueDates[entry.date] = true;
+            return true;
+        });
+
+        // Limit the total number of history entries if it gets too long
+        if (balanceHistory.length > 60) { // Keep last 60 data points
+            balanceHistory = balanceHistory.slice(balanceHistory.length - 60);
+        }
+
+        saveState();
+        renderTransactions();
+        renderRecentTransactions();
+        updateBalanceDisplay();
+        updateBalanceChart();
+    }
+
     function renderRecentTransactions() {
         recentTransactionsList.innerHTML = '';
-        const recent = userTransactions.slice(-5).reverse(); // Get last 5 and reverse to show newest first
-        if (recent.length === 0) {
-            recentTransactionsList.innerHTML = '<li class="no-transactions">ไม่มีรายการธุรกรรมล่าสุด</li>';
+        if (transactions.length === 0) {
+            recentTransactionsList.innerHTML = '<li>ยังไม่มีรายการล่าสุด</li>';
             return;
         }
-        recent.forEach(transaction => {
+        transactions.slice(0, 5).forEach(t => {
             const li = document.createElement('li');
-            li.className = `transaction-item ${transaction.type}`;
-            li.innerHTML = `
-                <span class="transaction-icon"><i class="fas ${getTransactionIcon(transaction.type)}"></i></span>
-                <span class="transaction-description">${transaction.description}</span>
-                <span class="transaction-amount">${transaction.type === 'deposit' || transaction.type === 'transfer-in' ? '+' : '-'}${transaction.amount.toFixed(2)} NTUN</span>
-                <span class="transaction-date">${new Date(transaction.date).toLocaleString()}</span>
-            `;
+            let transactionText = '';
+            let className = '';
+            let icon = '';
+
+            if (t.type === 'deposit') {
+                transactionText = `ฝากเงิน $${t.amount} - ${t.notes || 'ไม่มีบันทึก'}`;
+                className = 'transaction-deposit';
+                icon = '<i class="fas fa-plus-circle"></i>';
+            } else if (t.type === 'withdraw') {
+                transactionText = `ถอนเงิน $${t.amount} - ${t.notes || 'ไม่มีบันทึก'}`;
+                className = 'transaction-withdraw';
+                icon = '<i class="fas fa-minus-circle"></i>';
+            } else if (t.type === 'transfer-out') {
+                transactionText = `โอนเงิน $${t.amount} ไปยัง <strong>${t.recipient}</strong> (บ/ช: ${t.recipientAccount})`;
+                className = 'transaction-transfer-out';
+                icon = '<i class="fas fa-exchange-alt"></i>';
+            } else if (t.type === 'transfer-in') {
+                transactionText = `ได้รับเงิน $${t.amount} จาก <strong>${t.sender}</strong> (บ/ช: ${t.senderAccount})`;
+                className = 'transaction-transfer-in';
+                icon = '<i class="fas fa-hand-holding-usd"></i>';
+            }
+            li.className = className;
+            li.innerHTML = `${icon} <span>${transactionText}</span><span class="transaction-date">${t.date}</span>`;
             recentTransactionsList.appendChild(li);
         });
     }
 
-    /**
-     * Gets icon based on transaction type.
-     * @param {string} type - Transaction type.
-     * @returns {string} Font Awesome icon class.
-     */
-    function getTransactionIcon(type) {
-        switch (type) {
-            case 'deposit': return 'fa-arrow-circle-down';
-            case 'withdraw': return 'fa-arrow-circle-up';
-            case 'transfer-out': return 'fa-paper-plane';
-            case 'transfer-in': return 'fa-hand-holding-usd';
-            default: return 'fa-question-circle';
-        }
-    }
+    function renderTransactions(filterType = 'all', sortOrder = 'newest', targetList = allTransactionsList) {
+        targetList.innerHTML = '';
+        let filteredTransactions = [...transactions];
 
-    /**
-     * Renders all transactions with filters and sorting.
-     * @param {string} typeFilter - Type to filter by ('all', 'deposit', 'withdraw', etc.).
-     * @param {string} sortOrder - Sort order ('newest', 'oldest', 'amount-desc', 'amount-asc').
-     * @param {HTMLElement} listElement - The UL element to render transactions into.
-     */
-    function renderTransactions(typeFilter, sortOrder, listElement) {
-        listElement.innerHTML = '';
-        let filteredTransactions = [...userTransactions];
-
-        if (typeFilter !== 'all') {
-            filteredTransactions = filteredTransactions.filter(t => t.type === typeFilter);
+        if (filterType !== 'all') {
+            filteredTransactions = filteredTransactions.filter(t => t.type === filterType);
         }
 
-        // Sort transactions
-        filteredTransactions.sort((a, b) => {
-            const dateA = new Date(a.date).getTime();
-            const dateB = new Date(b.date).getTime();
-            switch (sortOrder) {
-                case 'newest': return dateB - dateA;
-                case 'oldest': return dateA - dateB;
-                case 'amount-desc': return b.amount - a.amount;
-                case 'amount-asc': return a.amount - b.amount;
-                default: return 0;
-            }
-        });
+        if (sortOrder === 'oldest') {
+            filteredTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+        } else if (sortOrder === 'amount-high') {
+            filteredTransactions.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
+        } else if (sortOrder === 'amount-low') {
+            filteredTransactions.sort((a, b) => parseFloat(a.amount) - parseFloat(b.amount));
+        } else { // newest (default)
+            filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        }
+
 
         if (filteredTransactions.length === 0) {
-            listElement.innerHTML = '<li class="no-transactions">ไม่มีรายการธุรกรรมที่ตรงกับเงื่อนไข</li>';
+            targetList.innerHTML = '<li>ไม่พบรายการ</li>';
             return;
         }
 
-        filteredTransactions.forEach(transaction => {
+        filteredTransactions.forEach(t => {
             const li = document.createElement('li');
-            li.className = `transaction-item ${transaction.type}`;
-            li.innerHTML = `
-                <span class="transaction-icon"><i class="fas ${getTransactionIcon(transaction.type)}"></i></span>
-                <span class="transaction-description">${transaction.description}</span>
-                <span class="transaction-amount">${transaction.type === 'deposit' || transaction.type === 'transfer-in' ? '+' : '-'}${transaction.amount.toFixed(2)} NTUN</span>
-                <span class="transaction-date">${new Date(transaction.date).toLocaleString()}</span>
-            `;
-            listElement.appendChild(li);
+            let transactionText = '';
+            let className = '';
+            let icon = '';
+
+            if (t.type === 'deposit') {
+                transactionText = `ฝากเงิน <strong>$${t.amount}</strong> - ${t.notes || 'ไม่มีบันทึก'}`;
+                className = 'transaction-deposit';
+                icon = '<i class="fas fa-plus-circle"></i>';
+            } else if (t.type === 'withdraw') {
+                transactionText = `ถอนเงิน <strong>$${t.amount}</strong> - ${t.notes || 'ไม่มีบันทึก'}`;
+                className = 'transaction-withdraw';
+                icon = '<i class="fas fa-minus-circle"></i>';
+            } else if (t.type === 'transfer-out') {
+                transactionText = `โอนเงิน <strong>$${t.amount}</strong> ไปยัง ${t.recipient} (บ/ช: ${t.recipientAccount}) - ${t.notes || 'ไม่มีบันทึก'}`;
+                className = 'transaction-transfer-out';
+                icon = '<i class="fas fa-exchange-alt"></i>';
+            } else if (t.type === 'transfer-in') {
+                transactionText = `ได้รับเงิน <strong>$${t.amount}</strong> จาก ${t.sender} (บ/ช: ${t.senderAccount}) - ${t.notes || 'ไม่มีบันทึก'}`;
+                className = 'transaction-transfer-in';
+                icon = '<i class="fas fa-hand-holding-usd"></i>';
+            }
+
+            li.className = className;
+            li.innerHTML = `${icon} <span>${transactionText}</span><span class="transaction-date">${t.date}</span>`;
+            targetList.appendChild(li);
         });
     }
 
-    /**
-     * Renders the balance chart.
-     */
-    function renderBalanceChart() {
-        const ctx = document.getElementById('balance-chart').getContext('2d');
-        const labels = userBalanceHistory.map((_, i) => `วันที่ ${i + 1}`); // Simple labels for now
-        const data = userBalanceHistory.map(entry => entry.balance);
+    function displayMessage(element, message, isError = false) {
+        element.textContent = message;
+        element.className = isError ? 'message error' : 'message success';
+        element.style.display = 'block';
+        setTimeout(() => {
+            element.style.display = 'none';
+        }, 3000);
+    }
+
+    function updateProfileDisplay() {
+        if (!userSettings) return;
+
+        const profilePicSrc = userSettings.profilePic && userSettings.profilePic.startsWith('data:image/') ?
+                              userSettings.profilePic :
+                              'https://via.placeholder.com/40x40/555555/FFFFFF?text=' + (userSettings.name ? userSettings.name.charAt(0).toUpperCase() : 'U');
+
+        sidebarProfilePic.src = profilePicSrc;
+        headerProfilePic.src = profilePicSrc;
+        profilePicPreviewImg.src = profilePicSrc;
+
+        sidebarUsername.textContent = userSettings.name;
+        headerUsername.textContent = userSettings.name;
+        document.getElementById('user-role').textContent = 'นักเรียน';
+
+        profileNameInput.value = userSettings.name;
+        accountNumberDisplay.value = userSettings.accountNumber;
+        displayCardHolder.textContent = userSettings.name.toUpperCase();
+
+        // Update QR Code section info
+        qrFullnameDisplay.textContent = userSettings.name;
+        qrAccountNumberDisplay.textContent = userSettings.accountNumber;
+        generateMyQrCode(); // Generate QR code when profile display updates
+    }
+
+    function generateCardDetails() {
+        const generateRandom = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+        let cardNumber = '';
+        for (let i = 0; i < 4; i++) {
+            cardNumber += String(generateRandom(1000, 9999)) + (i < 3 ? ' ' : '');
+        }
+
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+        const expiryMonth = String(currentMonth).padStart(2, '0');
+        const expiryYear = String((currentYear + 5) % 100);
+        const expiryDate = `${expiryMonth}/${expiryYear}`;
+
+        const cvv = String(generateRandom(100, 999));
+
+        bankCard = {
+            number: cardNumber,
+            expiry: expiryDate,
+            cvv: cvv
+        };
+        saveState();
+        updateCardDisplay();
+        displayMessage(cardMessage, 'สร้างรายละเอียดบัตรใหม่เรียบร้อย!', false);
+    }
+
+    function updateCardDisplay() {
+        if (bankCard) {
+            displayCardNumber.textContent = bankCard.number;
+            displayCardExpiry.textContent = bankCard.expiry;
+            displayCardCvv.textContent = bankCard.cvv;
+        } else {
+            displayCardNumber.textContent = 'XXXX XXXX XXXX XXXX';
+            displayCardExpiry.textContent = 'MM/YY';
+            displayCardCvv.textContent = 'XXX';
+        }
+    }
+
+    function updateBalanceChart() {
+        const ctx = document.getElementById('balanceChart').getContext('2d');
+        const labels = balanceHistory.map(entry => entry.date);
+        const data = balanceHistory.map(entry => entry.balance);
 
         if (balanceChart) {
-            balanceChart.destroy(); // Destroy existing chart before creating a new one
+            balanceChart.destroy();
         }
 
         balanceChart = new Chart(ctx, {
@@ -222,602 +356,654 @@ document.addEventListener('DOMContentLoaded', () => {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'ยอดเงิน NTUN',
+                    label: 'ยอดเงิน',
                     data: data,
-                    borderColor: 'rgb(75, 192, 192)',
-                    tension: 0.1,
-                    fill: false
+                    borderColor: 'var(--primary-color)',
+                    backgroundColor: 'rgba(138, 72, 216, 0.2)', // Use new primary color
+                    tension: 0.3,
+                    fill: true
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
+                    x: {
+                        grid: {
+                            color: 'var(--border-color)'
+                        },
+                        ticks: {
+                            color: 'var(--text-color)'
+                        }
+                    },
                     y: {
-                        beginAtZero: true
+                        beginAtZero: true,
+                        grid: {
+                            color: 'var(--border-color)'
+                        },
+                        ticks: {
+                            color: 'var(--text-color)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'var(--card-bg)',
+                        titleColor: 'var(--text-color)',
+                        bodyColor: 'var(--text-color)',
+                        borderColor: 'var(--primary-color)',
+                        borderWidth: 1,
                     }
                 }
             }
         });
     }
 
-    /**
-     * Generates a random 16-digit card number.
-     * @returns {string} Formatted card number.
-     */
-    function generateCardNumber() {
-        let cardNumber = '';
-        for (let i = 0; i < 16; i++) {
-            cardNumber += Math.floor(Math.random() * 10);
+    // --- QR Code Functions ---
+    let myQrCode = null; // Store QR code instance
+
+    function generateMyQrCode() {
+        if (!userSettings || !userSettings.accountNumber || !userSettings.name) {
+            console.error("User settings or account info missing for QR code generation.");
+            return;
         }
-        return cardNumber.match(/.{1,4}/g).join(' '); // Format with spaces
+
+        const qrData = JSON.stringify({
+            type: "account",
+            accountNumber: userSettings.accountNumber,
+            fullName: userSettings.name
+        });
+
+        // Clear previous QR code
+        myQrCodeContainer.innerHTML = '';
+
+        myQrCode = new QRCode(myQrCodeContainer, {
+            text: qrData,
+            width: 200,
+            height: 200,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
     }
 
-    /**
-     * Generates a random expiry date (MM/YY).
-     * @returns {string} Formatted expiry date.
-     */
-    function generateExpiryDate() {
-        const month = String(Math.floor(Math.random() * 12) + 1).padStart(2, '0');
-        const year = String(new Date().getFullYear() % 100 + Math.floor(Math.random() * 5)).padStart(2, '0'); // Next 5 years
-        return `${month}/${year}`;
-    }
-
-    /**
-     * Generates a random 3-digit CVV.
-     * @returns {string} CVV.
-     */
-    function generateCVV() {
-        return String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-    }
-
-    /**
-     * Updates the bank card display.
-     */
-    function updateBankCardDisplay() {
-        if (userBankCard) {
-            document.getElementById('card-number').textContent = userBankCard.cardNumber;
-            document.getElementById('card-holder-name').textContent = userBankCard.cardHolderName || 'NTUN STUDENT';
-            document.getElementById('card-expiry-date').textContent = userBankCard.expiryDate;
-            document.getElementById('card-cvv').textContent = userBankCard.cvv;
+    downloadQrBtn.addEventListener('click', () => {
+        if (!myQrCodeContainer.querySelector('canvas')) {
+            displayMessage(qrScanMessage, 'ไม่มี QR Code ให้ดาวน์โหลด', true);
+            return;
+        }
+        // Get the canvas element
+        const canvas = myQrCodeContainer.querySelector('canvas');
+        if (canvas) {
+            // Create a temporary link element
+            const link = document.createElement('a');
+            link.download = `NTUN_QR_${userSettings.accountNumber}.png`;
+            link.href = canvas.toDataURL('image/png'); // Get data URL of the canvas
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            displayMessage(qrScanMessage, 'ดาวน์โหลด QR Code สำเร็จ!', false);
         } else {
-            // Clear card display if no card exists
-            document.getElementById('card-number').textContent = 'XXXX XXXX XXXX XXXX';
-            document.getElementById('card-holder-name').textContent = 'NTUN STUDENT';
-            document.getElementById('card-expiry-date').textContent = 'MM/YY';
-            document.getElementById('card-cvv').textContent = 'XXX';
+            displayMessage(qrScanMessage, 'เกิดข้อผิดพลาดในการดาวน์โหลด QR Code', true);
         }
-    }
+    });
 
-    // --- Data Management (Now with Firebase Firestore) ---
+    scanQrBtn.addEventListener('click', () => {
+        const qrCodeDataString = qrInputData.value.trim();
+        if (!qrCodeDataString) {
+            displayMessage(qrScanMessage, 'โปรดกรอกข้อมูล QR Code เพื่อจำลองการสแกน', true);
+            qrTransferForm.classList.remove('active');
+            return;
+        }
 
-    /**
-     * Fetches user data (balance, transactions, settings, card) from Firestore.
-     * @param {string} uid - Firebase User ID.
-     */
-    async function fetchUserData(uid) {
         try {
-            const userDocRef = db.collection('users').doc(uid);
-            const doc = await userDocRef.get();
+            const scannedData = JSON.parse(qrCodeDataString);
 
-            if (doc.exists) {
-                const data = doc.data();
-                userBalance = data.balance !== undefined ? data.balance : 0.00;
-                userTransactions = data.transactions || [];
-                userSettings = data.settings || { darkMode: false };
-                userBankCard = data.bankCard || null;
-                userBalanceHistory = data.balanceHistory || [];
-                displayMessage(loginMessage, 'โหลดข้อมูลสำเร็จ', false);
+            if (scannedData.type === 'account' && scannedData.accountNumber && scannedData.fullName) {
+                // Check if account number exists in our "database" (users object)
+                let foundRecipient = null;
+                for (const username in users) {
+                    if (users[username].role === 'student' && users[username].data && users[username].data.userSettings && users[username].data.userSettings.accountNumber === scannedData.accountNumber) {
+                        foundRecipient = users[username];
+                        break;
+                    }
+                }
+
+                if (foundRecipient) {
+                    scannedRecipientName.value = foundRecipient.fullName;
+                    scannedRecipientAccount.value = foundRecipient.data.userSettings.accountNumber;
+                    qrTransferForm.classList.add('active'); // Show transfer form
+                    qrTransferAmount.value = '';
+                    qrTransferNotes.value = '';
+                    displayMessage(qrScanMessage, 'สแกน QR Code สำเร็จ! โปรดกรอกจำนวนเงินเพื่อโอน', false);
+                } else {
+                    displayMessage(qrScanMessage, 'ไม่พบเลขที่บัญชีจาก QR Code นี้', true);
+                    qrTransferForm.classList.remove('active');
+                }
+
             } else {
-                // New user, initialize default data
-                userBalance = 0.00;
-                userTransactions = [];
-                userSettings = { darkMode: false };
-                userBankCard = null;
-                userBalanceHistory = [{ date: new Date().toISOString(), balance: 0.00 }];
-                await userDocRef.set({
-                    balance: userBalance,
-                    transactions: userTransactions,
-                    settings: userSettings,
-                    bankCard: userBankCard,
-                    balanceHistory: userBalanceHistory
-                });
-                displayMessage(loginMessage, 'สร้างข้อมูลผู้ใช้ใหม่สำเร็จ', false);
+                displayMessage(qrScanMessage, 'รูปแบบข้อมูล QR Code ไม่ถูกต้อง', true);
+                qrTransferForm.classList.remove('active');
             }
-            updateUI(); // Update all UI elements after data is loaded
         } catch (error) {
-            console.error("Error fetching user data:", error);
-            displayMessage(loginMessage, `ข้อผิดพลาดในการโหลดข้อมูล: ${error.message}`, true);
-        }
-    }
-
-    /**
-     * Saves user data to Firestore.
-     * @param {string} uid - Firebase User ID.
-     * @param {object} dataToUpdate - Object containing fields to update.
-     */
-    async function saveUserData(uid, dataToUpdate) {
-        if (!uid) {
-            console.error("No user ID available to save data.");
-            return;
-        }
-        try {
-            const userDocRef = db.collection('users').doc(uid);
-            await userDocRef.update(dataToUpdate);
-            console.log("User data saved to Firestore.");
-        } catch (error) {
-            console.error("Error saving user data:", error);
-            // Consider more robust error handling for UI
-        }
-    }
-
-    // --- Authentication Logic (Firebase Auth) ---
-
-    /**
-     * Handles user registration with Firebase.
-     * Uses username as email for Firebase Auth.
-     */
-    registerForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('register-username').value; // Will be used as email
-        const password = document.getElementById('register-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
-
-        if (password !== confirmPassword) {
-            displayMessage(registerMessage, 'รหัสผ่านไม่ตรงกัน!', true);
-            return;
-        }
-
-        if (password.length < 6) {
-            displayMessage(registerMessage, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร!', true);
-            return;
-        }
-
-        try {
-            // Create user with email and password
-            const userCredential = await auth.createUserWithEmailAndPassword(username, password);
-            const user = userCredential.user;
-
-            // Initialize user data in Firestore for the new user
-            await db.collection('users').doc(user.uid).set({
-                email: user.email, // Store email as well
-                username: username, // Store username (email) for display purposes
-                balance: 0.00,
-                transactions: [],
-                settings: { darkMode: false },
-                bankCard: null,
-                balanceHistory: [{ date: new Date().toISOString(), balance: 0.00 }]
-            });
-
-            displayMessage(registerMessage, 'สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...', false);
-            registerForm.reset();
-            // onAuthStateChanged will handle UI update
-        } catch (error) {
-            console.error("Firebase Registration Error:", error);
-            let errorMessage = 'เกิดข้อผิดพลาดในการสมัครสมาชิก';
-            if (error.code === 'auth/email-already-in-use') {
-                errorMessage = 'ชื่อผู้ใช้นี้ (อีเมล) มีคนใช้แล้ว';
-            } else if (error.code === 'auth/invalid-email') {
-                errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
-            } else if (error.code === 'auth/weak-password') {
-                errorMessage = 'รหัสผ่านอ่อนเกินไป (ต้องมีอย่างน้อย 6 ตัวอักษร)';
-            }
-            displayMessage(registerMessage, errorMessage, true);
+            displayMessage(qrScanMessage, 'ข้อมูล QR Code ไม่ถูกต้อง (ไม่ใช่ JSON หรือเสียหาย)', true);
+            console.error('QR Code parse error:', error);
+            qrTransferForm.classList.remove('active');
         }
     });
 
-    /**
-     * Handles user login with Firebase.
-     * Uses username as email for Firebase Auth.
-     */
-    loginForm.addEventListener('submit', async (e) => {
+    qrTransferForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const username = document.getElementById('login-username').value; // Will be used as email
-        const password = document.getElementById('login-password').value;
+        const recipientName = scannedRecipientName.value;
+        const recipientAccount = scannedRecipientAccount.value;
+        const amount = parseFloat(qrTransferAmount.value);
+        const notes = qrTransferNotes.value;
 
-        try {
-            const userCredential = await auth.signInWithEmailAndPassword(username, password);
-            // onAuthStateChanged will handle UI update and data fetching
-            displayMessage(loginMessage, 'เข้าสู่ระบบสำเร็จ!', false);
-            loginForm.reset();
-        } catch (error) {
-            console.error("Firebase Login Error:", error);
-            let errorMessage = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
-            if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-                errorMessage = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
-            } else if (error.code === 'auth/invalid-email') {
-                errorMessage = 'รูปแบบอีเมลไม่ถูกต้อง';
-            }
-            displayMessage(loginMessage, errorMessage, true);
+        if (isNaN(amount) || amount <= 0) {
+            displayMessage(qrScanMessage, 'โปรดกรอกจำนวนเงินที่ถูกต้อง', true);
+            return;
         }
+        if (amount > balance) {
+            displayMessage(qrScanMessage, 'ยอดเงินไม่พอ', true);
+            return;
+        }
+        if (recipientAccount === userSettings.accountNumber) {
+            displayMessage(qrScanMessage, 'ไม่สามารถโอนเงินเข้าบัญชีตัวเองได้', true);
+            return;
+        }
+
+
+        // Find recipient user to update their balance and transactions
+        let foundRecipientUser = null;
+        let foundRecipientUsername = null;
+        let allUsers = JSON.parse(localStorage.getItem('users')) || {};
+        for (const username in allUsers) {
+            if (allUsers[username].role === 'student' && allUsers[username].data && allUsers[username].data.userSettings && allUsers[username].data.userSettings.accountNumber === recipientAccount) {
+                foundRecipientUser = allUsers[username];
+                foundRecipientUsername = username;
+                break;
+            }
+        }
+
+        if (!foundRecipientUser) {
+            displayMessage(qrScanMessage, 'ไม่พบผู้รับนี้ในระบบ', true); // Should not happen if previous scan was successful
+            return;
+        }
+
+        balance -= amount;
+        addTransaction('transfer-out', amount, notes, recipientName, userSettings.name, recipientAccount, userSettings.accountNumber);
+
+        // Update recipient's data
+        foundRecipientUser.data.balance = parseFloat(foundRecipientUser.data.balance) + amount;
+        foundRecipientUser.data.transactions.unshift({
+            id: Date.now(),
+            type: 'transfer-in',
+            amount: amount.toFixed(2),
+            date: new Date().toLocaleString('th-TH', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            notes: `จาก ${userSettings.name} (บ/ช: ${userSettings.accountNumber}) - ${notes}`,
+            sender: userSettings.name,
+            senderAccount: userSettings.accountNumber,
+            username: foundRecipientUsername
+        });
+        foundRecipientUser.data.balanceHistory.push({ date: new Date().toLocaleDateString('th-TH', {year: 'numeric', month: 'numeric', day: 'numeric'}), balance: foundRecipientUser.data.balance });
+        let uniqueDatesRecipient = {};
+        foundRecipientUser.data.balanceHistory = foundRecipientUser.data.balanceHistory.filter(entry => {
+            if (uniqueDatesRecipient[entry.date]) return false;
+            uniqueDatesRecipient[entry.date] = true;
+            return true;
+        });
+        if (foundRecipientUser.data.balanceHistory.length > 60) {
+            foundRecipientUser.data.balanceHistory = foundRecipientUser.data.balanceHistory.slice(foundRecipientUser.data.balanceHistory.length - 60);
+        }
+
+        localStorage.setItem('users', JSON.stringify(allUsers));
+
+        displayMessage(qrScanMessage, `โอนเงิน $${amount.toFixed(2)} ไปยัง ${recipientName} สำเร็จ.`, false);
+        qrTransferForm.reset();
+        qrTransferForm.classList.remove('active'); // Hide form after successful transfer
+        qrInputData.value = ''; // Clear QR input
+        updateBalanceDisplay();
+        renderRecentTransactions();
     });
 
-    /**
-     * Listens for Firebase Auth state changes.
-     * This is the central point for managing UI based on login status.
-     */
-    auth.onAuthStateChanged(async (user) => {
-        if (user) {
-            // User is signed in.
-            currentUserFirebase = user;
-            currentUsernameDisplay.textContent = user.email; // Display email from Firebase
-            currentUsernameSettings.value = user.email; // Display email in settings
 
+    // --- Authentication Logic ---
+    function checkAuth() {
+        if (currentUser && currentUser.role === 'student') {
             authContainer.classList.remove('active');
             mainAppContainer.classList.add('active');
-
-            // Fetch user data from Firestore
-            await fetchUserData(user.uid);
-            updateUI(); // Ensure UI is fully updated after data fetch
+            loadUserState();
+            updateProfileDisplay(); // This will also generate QR code for user
+            updateBalanceDisplay();
+            renderRecentTransactions();
+            updateCardDisplay();
+            const dashboardNavItem = document.querySelector('.nav-menu li[data-section="dashboard"]');
+            dashboardNavItem.click();
         } else {
-            // User is signed out.
-            currentUserFirebase = null;
-            userBalance = 0.00;
-            userTransactions = [];
-            userSettings = {};
-            userBankCard = null;
-            userBalanceHistory = [];
-
             authContainer.classList.add('active');
             mainAppContainer.classList.remove('active');
-            // Clear any displayed data
-            currentBalanceElem.textContent = '0.00 NTUN';
-            recentTransactionsList.innerHTML = '';
-            allTransactionsList.innerHTML = '';
-            if (balanceChart) balanceChart.destroy();
-            updateBankCardDisplay(); // Clear card display
-        }
-    });
-
-    /**
-     * Handles user logout.
-     */
-    logoutBtn.addEventListener('click', async () => {
-        try {
-            await auth.signOut();
-            displayMessage(loginMessage, 'ออกจากระบบเรียบร้อยแล้ว', false);
-            // onAuthStateChanged will handle UI update
-        } catch (error) {
-            console.error("Firebase Logout Error:", error);
-            displayMessage(loginMessage, `ข้อผิดพลาดในการออกจากระบบ: ${error.message}`, true);
-        }
-    });
-
-    // --- Main App Logic (Adapted for Firebase Firestore) ---
-
-    /**
-     * Updates all relevant UI elements after data changes.
-     */
-    function updateUI() {
-        updateBalanceDisplay();
-        renderRecentTransactions();
-        renderTransactions('all', 'newest', allTransactionsList); // Initial render for all transactions
-        updateBankCardDisplay();
-
-        // Apply dark mode setting
-        if (userSettings.darkMode) {
-            document.body.classList.add('dark-theme');
-            darkModeToggle.checked = true;
-            darkModeToggleSettings.checked = true;
-        } else {
-            document.body.classList.remove('dark-theme');
-            darkModeToggle.checked = false;
-            darkModeToggleSettings.checked = false;
+            loginForm.classList.add('active');
+            registerForm.classList.remove('active');
+            authSubtitle.textContent = 'เข้าสู่ระบบบัญชีนักเรียน';
         }
     }
 
-    // --- Event Listeners (Modified for Firebase) ---
+    passwordToggles.forEach(toggle => {
+        toggle.addEventListener('click', () => {
+            const targetId = toggle.dataset.target;
+            const passwordInput = document.getElementById(targetId);
+            const icon = toggle.querySelector('i');
 
-    // Navigation
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        });
+    });
+
+    showRegisterLink.addEventListener('click', () => {
+        loginForm.classList.remove('active');
+        registerForm.classList.add('active');
+        authSubtitle.textContent = 'สร้างบัญชีนักเรียนของคุณ';
+        loginMessage.style.display = 'none';
+        registerMessage.style.display = 'none';
+    });
+
+    showLoginLink.addEventListener('click', () => {
+        registerForm.classList.remove('active');
+        loginForm.classList.add('active');
+        authSubtitle.textContent = 'เข้าสู่ระบบบัญชีนักเรียน';
+        loginMessage.style.display = 'none';
+        registerMessage.style.display = 'none';
+    });
+
+    registerForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = document.getElementById('register-username').value.trim();
+        const password = document.getElementById('register-password').value;
+        const confirmPassword = document.getElementById('register-confirm-password').value;
+        const fullName = document.getElementById('register-full-name').value.trim();
+
+        if (username.length < 3) {
+            displayMessage(registerMessage, 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร', true);
+            return;
+        }
+        if (password.length < 6) {
+            displayMessage(registerMessage, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร', true);
+            return;
+        }
+        if (password !== confirmPassword) {
+            displayMessage(registerMessage, 'รหัสผ่านไม่ตรงกัน', true);
+            return;
+        }
+        if (!fullName) {
+            displayMessage(registerMessage, 'โปรดกรอกชื่อ-นามสกุลของคุณ', true);
+            return;
+        }
+        if (users[username]) {
+            displayMessage(registerMessage, 'ชื่อผู้ใช้นี้ถูกใช้งานแล้ว', true);
+            return;
+        }
+
+        const newAccountNumber = generateAccountNumber();
+        users[username] = {
+            password: password,
+            fullName: fullName,
+            role: 'student',
+            data: {
+                balance: 0.00,
+                transactions: [],
+                userSettings: {
+                    name: fullName,
+                    profilePic: null,
+                    accountNumber: newAccountNumber
+                },
+                bankCard: null,
+                balanceHistory: [{ date: new Date().toLocaleDateString('th-TH', {year: 'numeric', month: 'numeric', day: 'numeric'}), balance: 0.00 }]
+            }
+        };
+        if (!users[username].data.userSettings.profilePic) {
+             users[username].data.userSettings.profilePic = 'https://via.placeholder.com/40x40/555555/FFFFFF?text=' + fullName.charAt(0).toUpperCase();
+        }
+
+        localStorage.setItem('users', JSON.stringify(users));
+        displayMessage(registerMessage, 'ลงทะเบียนสำเร็จ! คุณสามารถเข้าสู่ระบบได้แล้ว', false);
+        registerForm.reset();
+        showLoginLink.click();
+    });
+
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value;
+
+        if (!users[username] || users[username].password !== password || users[username].role !== 'student') {
+            displayMessage(loginMessage, 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', true);
+            return;
+        }
+
+        currentUser = { username: username, fullName: users[username].fullName, role: 'student' };
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        displayMessage(loginMessage, 'เข้าสู่ระบบสำเร็จ!', false);
+        loginForm.reset();
+        setTimeout(() => {
+            checkAuth();
+        }, 500);
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        currentUser = null;
+        localStorage.removeItem('currentUser');
+        balance = 0.00;
+        transactions = [];
+        userSettings = null;
+        bankCard = null;
+        balanceHistory = [];
+        displayMessage(loginMessage, 'ออกจากระบบเรียบร้อยแล้ว', false);
+        checkAuth();
+    });
+
+
+    // --- Main App Event Listeners ---
+
     navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
-            e.preventDefault();
+        item.addEventListener('click', () => {
             navItems.forEach(nav => nav.classList.remove('active'));
             item.classList.add('active');
-            showSection(item.dataset.section);
+
+            const sectionToShow = item.dataset.section;
+            contentSections.forEach(section => {
+                section.classList.remove('active');
+                if (section.id === sectionToShow) {
+                    section.classList.add('active');
+                    currentSectionTitle.textContent = item.textContent.trim();
+                }
+            });
+
+            if (sectionToShow === 'transactions') {
+                renderTransactions(transactionTypeFilter.value, transactionSort.value, allTransactionsList);
+            }
+            if (sectionToShow === 'bank-card') {
+                updateCardDisplay();
+            }
+            if (sectionToShow === 'dashboard') {
+                updateBalanceDisplay();
+                renderRecentTransactions();
+                updateBalanceChart();
+            }
+            if (sectionToShow === 'settings') {
+                 updateProfileDisplay();
+            }
+            if (sectionToShow === 'qr-transfer') { // New: QR Transfer section activation
+                generateMyQrCode(); // Generate QR code for the user
+                qrTransferForm.classList.remove('active'); // Hide the transfer form by default
+                qrScanMessage.style.display = 'none'; // Clear messages
+            }
         });
     });
 
-    viewAllTransactionsBtn.addEventListener('click', (e) => {
+    quickActionButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetSection = button.dataset.section;
+            document.querySelector('.nav-menu li[data-section="' + targetSection + '"]').click();
+        });
+    });
+
+    viewAllTransactionsBtn.addEventListener('click', () => {
+        document.querySelector('.nav-menu li[data-section="transactions"]').click();
+    });
+
+
+    depositForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        navItems.forEach(nav => nav.classList.remove('active'));
-        document.querySelector('[data-section="transactions"]').classList.add('active');
-        showSection('transactions');
-    });
-
-    // Password Toggles
-    passwordToggles.forEach(toggle => {
-        toggle.addEventListener('click', togglePasswordVisibility);
-    });
-
-    // Theme Toggle
-    darkModeToggle.addEventListener('change', async () => {
-        const isDarkMode = darkModeToggle.checked;
-        document.body.classList.toggle('dark-theme', isDarkMode);
-        darkModeToggleSettings.checked = isDarkMode; // Sync with settings toggle
-        userSettings.darkMode = isDarkMode;
-        if (currentUserFirebase) {
-            await saveUserData(currentUserFirebase.uid, { settings: userSettings });
-        }
-    });
-
-    darkModeToggleSettings.addEventListener('change', async () => {
-        const isDarkMode = darkModeToggleSettings.checked;
-        document.body.classList.toggle('dark-theme', isDarkMode);
-        darkModeToggle.checked = isDarkMode; // Sync with main toggle
-        userSettings.darkMode = isDarkMode;
-        if (currentUserFirebase) {
-            await saveUserData(currentUserFirebase.uid, { settings: userSettings });
-        }
-    });
-
-    // Deposit Form
-    depositForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!currentUserFirebase) {
-            displayMessage(depositMessage, 'กรุณาเข้าสู่ระบบก่อนทำรายการ', true);
-            return;
-        }
-
         const amount = parseFloat(document.getElementById('deposit-amount').value);
+        const notes = document.getElementById('deposit-notes').value;
+
         if (isNaN(amount) || amount <= 0) {
-            displayMessage(depositMessage, 'จำนวนเงินไม่ถูกต้อง', true);
+            displayMessage(depositMessage, 'โปรดกรอกจำนวนเงินที่ถูกต้อง', true);
             return;
         }
 
-        userBalance += amount;
-        const transaction = {
-            id: Date.now(),
-            type: 'deposit',
-            amount: amount,
-            date: new Date().toISOString(),
-            description: `ฝากเงิน ${amount.toFixed(2)} NTUN`
-        };
-        userTransactions.push(transaction);
-        userBalanceHistory.push({ date: new Date().toISOString(), balance: userBalance });
-
-        await saveUserData(currentUserFirebase.uid, {
-            balance: userBalance,
-            transactions: userTransactions,
-            balanceHistory: userBalanceHistory
-        });
-
-        updateBalanceDisplay();
-        renderRecentTransactions();
-        displayMessage(depositMessage, `ฝากเงิน ${amount.toFixed(2)} NTUN สำเร็จ!`, false);
+        balance += amount;
+        addTransaction('deposit', amount, notes);
+        displayMessage(depositMessage, `ฝากเงินสำเร็จ $${amount.toFixed(2)}.`);
         depositForm.reset();
-    });
-
-    // Withdraw Form
-    withdrawForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (!currentUserFirebase) {
-            displayMessage(withdrawMessage, 'กรุณาเข้าสู่ระบบก่อนทำรายการ', true);
-            return;
-        }
-
-        const amount = parseFloat(document.getElementById('withdraw-amount').value);
-        if (isNaN(amount) || amount <= 0) {
-            displayMessage(withdrawMessage, 'จำนวนเงินไม่ถูกต้อง', true);
-            return;
-        }
-
-        if (userBalance < amount) {
-            displayMessage(withdrawMessage, 'ยอดเงินไม่พอสำหรับการถอน', true);
-            return;
-        }
-
-        userBalance -= amount;
-        const transaction = {
-            id: Date.now(),
-            type: 'withdraw',
-            amount: amount,
-            date: new Date().toISOString(),
-            description: `ถอนเงิน ${amount.toFixed(2)} NTUN`
-        };
-        userTransactions.push(transaction);
-        userBalanceHistory.push({ date: new Date().toISOString(), balance: userBalance });
-
-        await saveUserData(currentUserFirebase.uid, {
-            balance: userBalance,
-            transactions: userTransactions,
-            balanceHistory: userBalanceHistory
-        });
-
         updateBalanceDisplay();
         renderRecentTransactions();
-        displayMessage(withdrawMessage, `ถอนเงิน ${amount.toFixed(2)} NTUN สำเร็จ!`, false);
-        withdrawForm.reset();
     });
 
-    // Transfer Form
-    transferForm.addEventListener('submit', async (e) => {
+    withdrawForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (!currentUserFirebase) {
-            displayMessage(transferMessage, 'กรุณาเข้าสู่ระบบก่อนทำรายการ', true);
-            return;
-        }
-
-        const recipientUsername = document.getElementById('transfer-recipient').value; // This will be recipient's email
-        const amount = parseFloat(document.getElementById('transfer-amount').value);
+        const amount = parseFloat(document.getElementById('withdraw-amount').value);
+        const notes = document.getElementById('withdraw-notes').value;
 
         if (isNaN(amount) || amount <= 0) {
-            displayMessage(transferMessage, 'จำนวนเงินไม่ถูกต้อง', true);
+            displayMessage(withdrawMessage, 'โปรดกรอกจำนวนเงินที่ถูกต้อง', true);
+            return;
+        }
+        if (amount > balance) {
+            displayMessage(withdrawMessage, 'ยอดเงินไม่พอ', true);
             return;
         }
 
-        if (userBalance < amount) {
-            displayMessage(transferMessage, 'ยอดเงินไม่พอสำหรับการโอน', true);
+        balance -= amount;
+        addTransaction('withdraw', amount, notes);
+        displayMessage(withdrawMessage, `ถอนเงินสำเร็จ $${amount.toFixed(2)}.`);
+        withdrawForm.reset();
+        updateBalanceDisplay();
+        renderRecentTransactions();
+    });
+
+    transferForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const recipient = document.getElementById('transfer-recipient').value.trim();
+        const recipientAccount = document.getElementById('transfer-account-number').value.trim();
+        const amount = parseFloat(document.getElementById('transfer-amount').value);
+        const notes = document.getElementById('transfer-notes').value;
+
+        if (isNaN(amount) || amount <= 0) {
+            displayMessage(transferMessage, 'โปรดกรอกจำนวนเงินที่ถูกต้อง', true);
+            return;
+        }
+        if (amount > balance) {
+            displayMessage(transferMessage, 'ยอดเงินไม่พอ', true);
+            return;
+        }
+        if (!recipient || !recipientAccount || !/^[0-9]{10}$/.test(recipientAccount)) {
+            displayMessage(transferMessage, 'โปรดกรอกชื่อผู้รับและเลขที่บัญชี 10 หลักให้ถูกต้อง', true);
+            return;
+        }
+        if (recipientAccount === userSettings.accountNumber) {
+            displayMessage(transferMessage, 'ไม่สามารถโอนเงินเข้าบัญชีตัวเองได้', true);
             return;
         }
 
-        if (recipientUsername === currentUserFirebase.email) {
-            displayMessage(transferMessage, 'ไม่สามารถโอนเงินให้ตัวเองได้', true);
+        let foundRecipientUser = null;
+        let foundRecipientUsername = null;
+        let allUsers = JSON.parse(localStorage.getItem('users')) || {};
+        for (const username in allUsers) {
+            if (allUsers[username].role === 'student' && allUsers[username].data && allUsers[username].data.userSettings && allUsers[username].data.userSettings.accountNumber === recipientAccount) {
+                foundRecipientUser = allUsers[username];
+                foundRecipientUsername = username;
+                break;
+            }
+        }
+
+        if (!foundRecipientUser) {
+            displayMessage(transferMessage, 'ไม่พบเลขที่บัญชีผู้รับ', true);
             return;
         }
 
-        try {
-            // Find recipient by email
-            const recipientQuery = await db.collection('users').where('email', '==', recipientUsername).limit(1).get();
+        balance -= amount;
+        addTransaction('transfer-out', amount, notes, recipient, userSettings.name, recipientAccount, userSettings.accountNumber);
 
-            if (recipientQuery.empty) {
-                displayMessage(transferMessage, 'ไม่พบผู้รับด้วยชื่อผู้ใช้นี้ (อีเมล)', true);
+        foundRecipientUser.data.balance = parseFloat(foundRecipientUser.data.balance) + amount;
+        foundRecipientUser.data.transactions.unshift({
+            id: Date.now(),
+            type: 'transfer-in',
+            amount: amount.toFixed(2),
+            date: new Date().toLocaleString('th-TH', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            notes: `จาก ${userSettings.name} (บ/ช: ${userSettings.accountNumber}) - ${notes}`,
+            sender: userSettings.name,
+            senderAccount: userSettings.accountNumber,
+            username: foundRecipientUsername
+        });
+        foundRecipientUser.data.balanceHistory.push({ date: new Date().toLocaleDateString('th-TH', {year: 'numeric', month: 'numeric', day: 'numeric'}), balance: foundRecipientUser.data.balance });
+        let uniqueDatesRecipient = {};
+        foundRecipientUser.data.balanceHistory = foundRecipientUser.data.balanceHistory.filter(entry => {
+            if (uniqueDatesRecipient[entry.date]) return false;
+            uniqueDatesRecipient[entry.date] = true;
+            return true;
+        });
+        if (foundRecipientUser.data.balanceHistory.length > 60) {
+            foundRecipientUser.data.balanceHistory = foundRecipientUser.data.balanceHistory.slice(foundRecipientUser.data.balanceHistory.length - 60);
+        }
+
+        localStorage.setItem('users', JSON.stringify(allUsers));
+
+        displayMessage(transferMessage, `โอนเงิน $${amount.toFixed(2)} ไปยัง ${recipient} สำเร็จ.`, false);
+        transferForm.reset();
+        updateBalanceDisplay();
+        renderRecentTransactions();
+    });
+
+    generateCardBtn.addEventListener('click', () => {
+        generateCardDetails();
+    });
+
+    copyCardInfoBtn.addEventListener('click', () => {
+        if (!bankCard) {
+            displayMessage(cardMessage, 'โปรดสร้างบัตรก่อน!', true);
+            return;
+        }
+        const cardInfo = `หมายเลขบัตร: ${bankCard.number}\nชื่อผู้ถือ: ${userSettings.name}\nวันหมดอายุ: ${bankCard.expiry}\nCVV: ${bankCard.cvv}`;
+        navigator.clipboard.writeText(cardInfo).then(() => {
+            displayMessage(cardMessage, 'คัดลอกข้อมูลบัตรลงคลิปบอร์ดแล้ว!', false);
+        }).catch(err => {
+            displayMessage(cardMessage, 'ไม่สามารถคัดลอกข้อมูลบัตรได้', true);
+            console.error('Failed to copy: ', err);
+        });
+    });
+
+
+    profilePicUploadInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                displayMessage(settingsMessage, 'ขนาดไฟล์รูปภาพต้องไม่เกิน 2MB', true);
+                profilePicUploadInput.value = '';
                 return;
             }
-
-            const recipientDoc = recipientQuery.docs[0];
-            const recipientUid = recipientDoc.id;
-            const recipientData = recipientDoc.data();
-            let recipientBalance = recipientData.balance;
-            let recipientTransactions = recipientData.transactions || [];
-            let recipientBalanceHistory = recipientData.balanceHistory || [];
-
-            // Perform transfer
-            userBalance -= amount;
-            recipientBalance += amount;
-
-            // Add transactions for sender
-            userTransactions.push({
-                id: Date.now(),
-                type: 'transfer-out',
-                amount: amount,
-                date: new Date().toISOString(),
-                description: `โอนเงินให้ ${recipientUsername}`
-            });
-            userBalanceHistory.push({ date: new Date().toISOString(), balance: userBalance });
-
-            // Add transactions for recipient
-            recipientTransactions.push({
-                id: Date.now(),
-                type: 'transfer-in',
-                amount: amount,
-                date: new Date().toISOString(),
-                description: `รับเงินจาก ${currentUserFirebase.email}`
-            });
-            recipientBalanceHistory.push({ date: new Date().toISOString(), balance: recipientBalance });
-
-            // Save data for both sender and recipient
-            await saveUserData(currentUserFirebase.uid, {
-                balance: userBalance,
-                transactions: userTransactions,
-                balanceHistory: userBalanceHistory
-            });
-            await saveUserData(recipientUid, {
-                balance: recipientBalance,
-                transactions: recipientTransactions,
-                balanceHistory: recipientBalanceHistory
-            });
-
-            updateBalanceDisplay();
-            renderRecentTransactions();
-            displayMessage(transferMessage, `โอนเงิน ${amount.toFixed(2)} NTUN ให้ ${recipientUsername} สำเร็จ!`, false);
-            transferForm.reset();
-
-        } catch (error) {
-            console.error("Firebase Transfer Error:", error);
-            displayMessage(transferMessage, `ข้อผิดพลาดในการโอนเงิน: ${error.message}`, true);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                profilePicPreviewImg.src = e.target.result;
+                profilePicPreviewImg.dataset.base64 = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            profilePicPreviewImg.src = 'https://via.placeholder.com/100x100/555555/FFFFFF?text=Preview';
+            delete profilePicPreviewImg.dataset.base64;
         }
     });
 
-    // Account Settings Form (Dark Mode)
-    accountSettingsForm.addEventListener('submit', async (e) => {
+
+    settingsForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (!currentUserFirebase) {
-            displayMessage(settingsMessage, 'กรุณาเข้าสู่ระบบก่อนบันทึกการตั้งค่า', true);
-            return;
+        const newName = profileNameInput.value.trim();
+        const newPicBase64 = profilePicPreviewImg.dataset.base64;
+
+        let changed = false;
+        if (newName && newName !== userSettings.name) {
+            userSettings.name = newName;
+            currentUser.fullName = newName;
+            changed = true;
         }
 
-        // Dark mode is already handled by the toggle change event.
-        // This form might be for other settings later.
-        // For now, just confirm settings saved.
-        displayMessage(settingsMessage, 'บันทึกการตั้งค่าเรียบร้อยแล้ว!', false);
+        if (newPicBase64 && newPicBase64 !== userSettings.profilePic) {
+            userSettings.profilePic = newPicBase64;
+            changed = true;
+        } else if (!newPicBase64 && userSettings.profilePic && userSettings.profilePic.startsWith('data:image/')) {
+             userSettings.profilePic = 'https://via.placeholder.com/40x40/555555/FFFFFF?text=' + (userSettings.name ? userSettings.name.charAt(0).toUpperCase() : 'U');
+             changed = true;
+        }
+
+        if (changed) {
+            saveState();
+            updateProfileDisplay();
+            displayMessage(settingsMessage, 'บันทึกการตั้งค่าโปรไฟล์เรียบร้อยแล้ว!', false);
+            profilePicUploadInput.value = '';
+            delete profilePicPreviewImg.dataset.base64;
+        } else {
+            displayMessage(settingsMessage, 'ไม่มีการเปลี่ยนแปลงในการตั้งค่าโปรไฟล์', false);
+        }
     });
 
-    // Change Password Form
-    changePasswordForm.addEventListener('submit', async (e) => {
+    accountSettingsForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (!currentUserFirebase) {
-            displayMessage(settingsMessage, 'กรุณาเข้าสู่ระบบก่อนเปลี่ยนรหัสผ่าน', true);
-            return;
-        }
-
-        const currentPassword = document.getElementById('current-password').value;
+        const oldPassword = document.getElementById('old-password').value;
         const newPassword = document.getElementById('new-password').value;
         const confirmNewPassword = document.getElementById('confirm-new-password').value;
 
-        if (newPassword !== confirmNewPassword) {
-            displayMessage(settingsMessage, 'รหัสผ่านใหม่ไม่ตรงกัน!', true);
+        if (!oldPassword || !newPassword || !confirmNewPassword) {
+            displayMessage(settingsMessage, 'ต้องกรอกข้อมูลรหัสผ่านทุกช่อง', true);
+            return;
+        }
+        if (users[currentUser.username].password !== oldPassword) {
+            displayMessage(settingsMessage, 'รหัสผ่านเก่าไม่ถูกต้อง', true);
             return;
         }
         if (newPassword.length < 6) {
-            displayMessage(settingsMessage, 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร!', true);
+            displayMessage(settingsMessage, 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร', true);
+            return;
+        }
+        if (newPassword !== confirmNewPassword) {
+            displayMessage(settingsMessage, 'รหัสผ่านใหม่ไม่ตรงกัน', true);
+            return;
+        }
+        if (newPassword === oldPassword) {
+            displayMessage(settingsMessage, 'รหัสผ่านใหม่ต้องไม่เหมือนรหัสผ่านเก่า', true);
             return;
         }
 
-        try {
-            // Re-authenticate user with current password
-            const credential = firebase.auth.EmailAuthProvider.credential(currentUserFirebase.email, currentPassword);
-            await currentUserFirebase.reauthenticateWithCredential(credential);
-
-            // Update password
-            await currentUserFirebase.updatePassword(newPassword);
-            displayMessage(settingsMessage, 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!', false);
-            changePasswordForm.reset();
-        } catch (error) {
-            console.error("Firebase Change Password Error:", error);
-            let errorMessage = 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน';
-            if (error.code === 'auth/wrong-password') {
-                errorMessage = 'รหัสผ่านปัจจุบันไม่ถูกต้อง';
-            } else if (error.code === 'auth/weak-password') {
-                errorMessage = 'รหัสผ่านใหม่ไม่ปลอดภัย (ต้องมีอย่างน้อย 6 ตัวอักษร)';
-            } else if (error.code === 'auth/requires-recent-login') {
-                errorMessage = 'โปรดเข้าสู่ระบบอีกครั้งเพื่อยืนยันตัวตนก่อนเปลี่ยนรหัสผ่าน';
-            }
-            displayMessage(settingsMessage, errorMessage, true);
-        }
+        users[currentUser.username].password = newPassword;
+        localStorage.setItem('users', JSON.stringify(users));
+        displayMessage(settingsMessage, 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!', false);
+        accountSettingsForm.reset();
     });
 
-    // Reset Data (Delete User)
-    resetDataBtn.addEventListener('click', () => {
-        if (!currentUserFirebase) {
-            displayMessage(settingsMessage, 'ไม่มีผู้ใช้เข้าสู่ระบบ', true);
-            return;
-        }
 
-        // Use a custom modal for confirmation instead of alert/confirm
-        // For simplicity, I'll use a basic window.confirm for now, but recommend replacing it.
-        if (window.confirm('คุณแน่ใจหรือไม่ที่จะรีเซ็ตข้อมูลธนาคารทั้งหมดของคุณ (ยอดเงิน, รายการ, การตั้งค่า)? การดำเนินการนี้ไม่สามารถย้อนกลับได้!')) {
-            // Delete user data from Firestore
-            db.collection('users').doc(currentUserFirebase.uid).delete()
-                .then(() => {
-                    // Delete user from Firebase Authentication
-                    currentUserFirebase.delete()
-                        .then(() => {
-                            displayMessage(loginMessage, 'ข้อมูลทั้งหมดของคุณถูกรีเซ็ตแล้ว และคุณถูกออกจากระบบ', false);
-                            // onAuthStateChanged will handle UI update
-                        })
-                        .catch((error) => {
-                            console.error("Error deleting user from Auth:", error);
-                            let errorMessage = 'เกิดข้อผิดพลาดในการลบผู้ใช้';
-                            if (error.code === 'auth/requires-recent-login') {
-                                errorMessage = 'โปรดเข้าสู่ระบบอีกครั้งเพื่อยืนยันตัวตนก่อนรีเซ็ตข้อมูล';
-                            }
-                            displayMessage(settingsMessage, errorMessage, true);
-                        });
-                })
-                .catch((error) => {
-                    console.error("Error deleting user data from Firestore:", error);
-                    displayMessage(settingsMessage, `ข้อผิดพลาดในการลบข้อมูล: ${error.message}`, true);
-                });
+    resetDataBtn.addEventListener('click', () => {
+        if (confirm('คุณแน่ใจหรือไม่ที่จะรีเซ็ตข้อมูลธนาคารทั้งหมดของคุณ (ยอดเงิน, รายการ, การตั้งค่า)? การดำเนินการนี้ไม่สามารถย้อนกลับได้!')) {
+            if (currentUser && users[currentUser.username]) {
+                delete users[currentUser.username];
+                localStorage.setItem('users', JSON.stringify(users));
+            }
+
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            
+            balance = 0.00;
+            transactions = [];
+            userSettings = null;
+            bankCard = null;
+            balanceHistory = [];
+            
+            displayMessage(loginMessage, 'ข้อมูลทั้งหมดของคุณถูกรีเซ็ตแล้ว และคุณถูกออกจากระบบ', false);
+            checkAuth();
         }
     });
 
     refreshBalanceBtn.addEventListener('click', () => {
-        if (currentUserFirebase) {
-            fetchUserData(currentUserFirebase.uid); // Re-fetch data to refresh
-        } else {
-            displayMessage(loginMessage, 'กรุณาเข้าสู่ระบบเพื่ออัปเดตยอดเงิน', true);
-        }
+        updateBalanceDisplay();
+
     });
 
     applyFiltersBtn.addEventListener('click', () => {
@@ -826,25 +1012,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTransactions(type, sort, allTransactionsList);
     });
 
-    // Bank Card Generation
-    generateCardBtn.addEventListener('click', async () => {
-        if (!currentUserFirebase) {
-            displayMessage(cardMessage, 'กรุณาเข้าสู่ระบบก่อนสร้างบัตร', true);
-            return;
-        }
-
-        const newCard = {
-            cardNumber: generateCardNumber(),
-            cardHolderName: currentUserFirebase.email, // Use email as card holder name
-            expiryDate: generateExpiryDate(),
-            cvv: generateCVV()
-        };
-        userBankCard = newCard;
-        await saveUserData(currentUserFirebase.uid, { bankCard: userBankCard });
-        updateBankCardDisplay();
-        displayMessage(cardMessage, 'สร้าง/อัปเดตบัตรสำเร็จ!', false);
-    });
-
-    // Initial Load (handled by onAuthStateChanged)
-    // No need for checkAuth() here, onAuthStateChanged will trigger on page load
+    // Initial Load
+    checkAuth();
 });
