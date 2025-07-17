@@ -1004,7 +1004,6 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshBalanceBtn.addEventListener('click', () => {
         updateBalanceDisplay();
 
-
     });
 
     applyFiltersBtn.addEventListener('click', () => {
